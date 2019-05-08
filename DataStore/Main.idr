@@ -4,37 +4,47 @@ import Data.Vect
 import Data.String
 
 
-data DataStore : Type where
-    MkData : (size : Nat) ->
-             (items : Vect size String) ->
-             DataStore
+infixr 5 .+.
 
-size : DataStore -> Nat
-size (MkData size' _) = size'
 
-items : (store : DataStore) -> Vect (size store) String
-items (MkData _ items') = items'
+data Schema = SString
+            | SInt
+            | (.+.) Schema Schema
 
-initDatastore : DataStore
-initDatastore = MkData 0 (fromList [])
+SchemaType : Schema -> Type
+SchemaType SString = String
+SchemaType SInt = Int
+SchemaType (s1 .+. s2) = (SchemaType s1, SchemaType s2)
 
-addItem : String -> DataStore -> DataStore
-addItem item (MkData s ds) = MkData _ (addLast item ds)
+
+record DataStore where
+    constructor MkData
+    schema : Schema
+    size : Nat
+    items : Vect size (SchemaType schema)
+
+initDatastore : Schema -> DataStore
+initDatastore schema = MkData schema _ []
+
+addItem : (store : DataStore) -> SchemaType (schema store) ->  DataStore
+addItem (MkData schema' size' items') item = MkData schema' _ (addLast items')
     where
-        addLast : a -> Vect n a -> Vect (S n) a
-        addLast item [] = [item]
-        addLast item (d :: ds) = d :: addLast item ds
+        addLast : Vect n (SchemaType schema') -> Vect (S n) (SchemaType schema')
+        addLast [] = [item]
+        addLast (d :: ds) = d :: addLast ds
 
 
-getItem : Integer -> DataStore -> Maybe String
+getItem : Integer -> (store : DataStore) -> Maybe (SchemaType (schema store))
 getItem pos store = map (\idx => index idx (items store)) (integerToFin pos (size store))
 
-        
-data Command = Add String
+
+data Command = CSchema Schema
+             | Add String
              | Get Integer
              | Quit
 
-             
+
+             {-
 parseCommand : String -> String -> Maybe Command
 parseCommand "add" item = Just $ Add item
 parseCommand "get" val = map (\idx => Get idx) (parseInteger val)
@@ -51,12 +61,14 @@ executeCommand  Quit      _  = Nothing
 
 
 processInput : DataStore -> String -> Maybe (String, DataStore)
-processInput ds cmd = 
-    let (action, params) = break (== ' ') cmd 
+processInput ds cmd =
+    let (action, params) = break (== ' ') cmd
     in case parseCommand action params of
         Just cmd => executeCommand cmd ds
         Nothing => Just ("Wrong command\n", ds)
-    
+
 
 main : IO ()
 main = replWith initDatastore "Command: " processInput
+
+-}
