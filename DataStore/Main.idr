@@ -9,11 +9,13 @@ infixr 5 .+.
 
 data Schema = SString
             | SInt
+            | SChar
             | (.+.) Schema Schema
 
 SchemaType : Schema -> Type
 SchemaType SString = String
 SchemaType SInt = Int
+SchemaType SChar = Char
 SchemaType (s1 .+. s2) = (SchemaType s1, SchemaType s2)
 
 
@@ -36,35 +38,33 @@ getItem : (store : DataStore) -> Integer -> Maybe (SchemaType (schema store))
 getItem store pos = map (\idx => index idx (items store)) (integerToFin pos (size store))
 
 
+getAll : (store : DataStore) -> List (SchemaType (schema store))
+getAll store = toList (items store)
+
+
 display : SchemaType schema -> String
 display {schema = SString} item = "\"" ++ item ++ "\""
 display {schema = SInt} item = show item
+display {schema = SChar} item = show item
 display {schema = x .+. y} (iteml, itemr) = (display iteml) ++ ", " ++ (display itemr)
 
 
-data Command : Schema -> Type where
-    SetSchema : (newSchema : Schema) -> Command schema
-    Add : SchemaType schema -> Command schema
-    Get : Integer -> Command schema
-    Quit: Command schema
+parseType : String -> Maybe Schema
+parseType "Int"     = Just SInt
+parseType "String"  = Just SString
+parseType "Char"    = Just SChar
+parseType _         = Nothing
 
 
 parseSchema : List String -> Maybe Schema
-parseSchema ("Int" :: xs)
-    = case xs of
-        [] => Just SInt
-        _  => case parseSchema xs of
-            Nothing => Nothing
-            Just xs_sch => Just (SInt .+. xs_sch)
-parseSchema ("String" :: xs)
-    = case xs of
-        [] => Just SString
-        _  => case parseSchema xs of
-            Nothing => Nothing
-            Just xs_sch => Just (SString .+. xs_sch)
-parseSchema _ = Nothing
+parseSchema [str] = parseType str
+parseSchema (x :: xs) = do
+    sl <- parseType x
+    sr <- parseSchema xs
+    pure (sl .+. sr)
 
 
+||| Parse next prefix from schema definition
 parsePrefix : (schema : Schema) -> String -> Maybe (SchemaType schema, String)
 parsePrefix SString input = getQuoted (unpack input)
     where
@@ -76,11 +76,12 @@ parsePrefix SString input = getQuoted (unpack input)
 parsePrefix SInt input = case span isDigit input of
                                 ("", rest)  => Nothing
                                 (num, rest) => Just (cast num, rest)
-parsePrefix (s1 .+. s2) input = case parsePrefix s1 input of
-                                    Nothing => Nothing
-                                    Just (lval, rest) => case parsePrefix s2 (ltrim rest) of
-                                                            Nothing => Nothing
-                                                            Just (rval, rest') => Just ((lval, rval), rest')
+parsePrefix SChar input = case length input of
+                                Z  => Nothing
+                                _ => Just (strHead input, (ltrim . strTail) input)
+parsePrefix (s1 .+. s2) input = do (lval, rest) <- parsePrefix s1 input
+                                   (rval, rest') <- parsePrefix s2 (ltrim rest)
+                                   pure ((lval, rval), rest')
 
 
 parseBySchema : (schema : Schema) -> String -> Maybe (SchemaType schema)
@@ -91,22 +92,36 @@ parseBySchema schema str =
         Nothing => Nothing
 
 
+data Command : Schema -> Type where
+    SetSchema : (newSchema : Schema) -> Command schema
+    Add : SchemaType schema -> Command schema
+    Get : Integer -> Command schema
+    GetAll : Command schema
+    Quit: Command schema
+
+
 parseCommand : (schema : Schema) -> String -> String -> Maybe (Command schema)
 parseCommand _      "schema" args = SetSchema <$> (parseSchema (words args))
 parseCommand schema "add"    args = Add <$> (parseBySchema schema args)
-parseCommand _      "get"    val  = Get <$> (parseInteger val)
+parseCommand _      "get"    val  = case parseInteger val of
+                                        Just num => Just (Get num)
+                                        _        => Just GetAll
 parseCommand _      "quit"   _    = Just Quit
+parseCommand _      "q"      _    = Just Quit
 parseCommand _      _        _    = Nothing
 
 
 executeCommand : (store : DataStore) -> Command (schema store) -> Maybe (String, DataStore)
 executeCommand store (SetSchema newSchema) = case size store of
-                                                Z => Just ("New schema set", (MkData newSchema _ []))
+                                                Z => Just ("New schema set\n", (MkData newSchema _ []))
                                                 _ => Nothing
 executeCommand store (Add item) = Just ("ID: " ++ cast (size store) ++ "\n", addItem store item)
 executeCommand store (Get idx)  = case getItem store idx of
     Just item => Just (display item ++ "\n", store)
     Nothing   => Just ("Item " ++ show idx ++ " not found\n", store)
+executeCommand  store GetAll    = Just (unlines items, store)
+    where
+        items = display <$> getAll store
 executeCommand  _ Quit          = Nothing
 
 
