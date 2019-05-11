@@ -37,15 +37,32 @@ getItem store pos = map (\idx => index idx (items store)) (integerToFin pos (siz
 
 
 display : SchemaType schema -> String
-display {schema = SString} item = item
+display {schema = SString} item = "\"" ++ item ++ "\""
 display {schema = SInt} item = show item
 display {schema = x .+. y} (iteml, itemr) = (display iteml) ++ ", " ++ (display itemr)
 
 
 data Command : Schema -> Type where
+    SetSchema : (newSchema : Schema) -> Command schema
     Add : SchemaType schema -> Command schema
     Get : Integer -> Command schema
     Quit: Command schema
+
+
+parseSchema : List String -> Maybe Schema
+parseSchema ("Int" :: xs)
+    = case xs of
+        [] => Just SInt
+        _  => case parseSchema xs of
+            Nothing => Nothing
+            Just xs_sch => Just (SInt .+. xs_sch)
+parseSchema ("String" :: xs)
+    = case xs of
+        [] => Just SString
+        _  => case parseSchema xs of
+            Nothing => Nothing
+            Just xs_sch => Just (SString .+. xs_sch)
+parseSchema _ = Nothing
 
 
 parsePrefix : (schema : Schema) -> String -> Maybe (SchemaType schema, String)
@@ -67,21 +84,26 @@ parsePrefix (s1 .+. s2) input = case parsePrefix s1 input of
 
 
 parseBySchema : (schema : Schema) -> String -> Maybe (SchemaType schema)
-parseBySchema schema str = case parsePrefix schema str of
-                            Just (res, "") => Just res
-                            Just _  => Nothing
-                            Nothing => Nothing
+parseBySchema schema str =
+    case parsePrefix schema str of
+        Just (res, "") => Just res
+        Just _  => Nothing
+        Nothing => Nothing
 
 
 parseCommand : (schema : Schema) -> String -> String -> Maybe (Command schema)
-parseCommand schema "add" items = Add <$> (parseBySchema schema items)
-parseCommand schema "get" val = Get <$> (parseInteger val)
-parseCommand _ "quit" _ = Just Quit
-parseCommand _ _ _ = Nothing
+parseCommand _      "schema" args = SetSchema <$> (parseSchema (words args))
+parseCommand schema "add"    args = Add <$> (parseBySchema schema args)
+parseCommand _      "get"    val  = Get <$> (parseInteger val)
+parseCommand _      "quit"   _    = Just Quit
+parseCommand _      _        _    = Nothing
 
 
 executeCommand : (store : DataStore) -> Command (schema store) -> Maybe (String, DataStore)
-executeCommand store (Add item) = Just ("Item added\n", addItem store item)
+executeCommand store (SetSchema newSchema) = case size store of
+                                                Z => Just ("New schema set", (MkData newSchema _ []))
+                                                _ => Nothing
+executeCommand store (Add item) = Just ("ID: " ++ cast (size store) ++ "\n", addItem store item)
 executeCommand store (Get idx)  = case getItem store idx of
     Just item => Just (display item ++ "\n", store)
     Nothing   => Just ("Item " ++ show idx ++ " not found\n", store)
