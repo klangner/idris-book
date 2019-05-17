@@ -1,6 +1,8 @@
 module Chapter8
 
 
+-- 8.1
+
 same_cons : {xs : List a} -> {ys : List a} -> xs = ys -> x :: xs = x :: ys
 same_cons = cong
 
@@ -15,3 +17,10 @@ data ThreeEq : a -> b -> c -> Type where
 
 allSameS : (x, y, z : Nat) -> ThreeEq x y z -> ThreeEq (S x) (S y) (S z)
 allSameS n n n (Same n) = Same (S n)
+
+-- 8.2
+
+myPlusCommutes : (n : Nat) -> (m : Nat) -> n + m = m + n
+myPlusCommutes Z m = rewrite (plusZeroRightNeutral m) in Refl
+myPlusCommutes (S k) m = rewrite myPlusCommutes k m in
+                         rewrite plusSuccRightSucc m k in Refl
