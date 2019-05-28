@@ -20,6 +20,10 @@ allSameS n n n (Same n) = Same (S n)
 
 -- 8.2
 
+|||
+||| ```idris example
+||| concat [[1,2,3], [4,5,6]]
+||| ```
 myPlusCommutes : (n : Nat) -> (m : Nat) -> n + m = m + n
 myPlusCommutes Z m = rewrite (plusZeroRightNeutral m) in Refl
 myPlusCommutes (S k) m = rewrite myPlusCommutes k m in

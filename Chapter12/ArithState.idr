@@ -65,8 +65,14 @@ namespace ConsoleDo
 
 data Fuel = Dry | More (Lazy Fuel)
 
+partial
 forever : Fuel
 forever = More forever
+
+
+randoms : Int -> Stream Int
+randoms seed = let seed' = 1664525 * seed + 1013904223 in
+                   (seed' `shiftR` 2) :: randoms seed'
 
 
 runCommand : Command a -> IO a
@@ -85,3 +91,35 @@ run fuel (Quit val) = do pure (Just val)
 run (More fuel) (Do cmd f) = do res <- runCommand cmd
                                 run fuel (f res)
 run Dry _ = pure Nothing
+
+
+mutual
+  correct : ConsoleIO GameState
+  correct = do PutStr "Correct!\n"
+               st <- GetGameState
+               PutGameState (addCorrect st)
+               quiz
+
+  wrong : Int -> ConsoleIO GameState
+  wrong ans
+        = do PutStr ("Wrong, the answer is " ++ show ans ++ "\n")
+             st <- GetGameState
+             PutGameState (addWrong st)
+             quiz
+
+  data Input = Answer Int
+             | QuitCmd
+
+  readInput : (prompt : String) -> Command Input
+  readInput prompt
+     = do PutStr prompt
+          answer <- GetLine
+          if toLower answer == "quit"
+             then Pure QuitCmd
+             else Pure (Answer (cast answer))
+
+
+  quiz : ConsoleIO GameState
+  quiz = do num1 <- GetRandom
+            num2 <- GetRandom
+            st <- GetGameState
