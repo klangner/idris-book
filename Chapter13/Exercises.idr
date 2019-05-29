@@ -53,6 +53,6 @@ steamIce = do Condense
               Freeze
 
 -- The following definition should not type-check:
-overMelt : MatterCmd () Solid Gas
-overMelt = do Melt
-              Melt
+-- overMelt : MatterCmd () Solid Gas
+-- overMelt = do Melt
+--               Melt
