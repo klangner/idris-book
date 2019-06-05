@@ -3,7 +3,6 @@ module Door
 
 data DoorState = DoorClosed | DoorOpen
 
-
 data DoorCmd : Type -> DoorState -> DoorState -> Type where
   Open : DoorCmd () DoorClosed DoorOpen
   Close : DoorCmd () DoorOpen DoorClosed
